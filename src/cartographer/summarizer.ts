@@ -22,8 +22,9 @@ export class MapSummarizer {
 
   /**
    * Summarize all unsummarized file-level map nodes.
+   * @param useLlm If false, use fast mechanical summaries (default for init).
    */
-  async summarizeFiles(repoId: string, onProgress?: (nodeId: MapNodeId) => void): Promise<number> {
+  async summarizeFiles(repoId: string, onProgress?: (nodeId: MapNodeId) => void, useLlm = false): Promise<number> {
     const unsummarized = this.db
       .prepare(
         "SELECT id, path, language, public_api, complexity_score, loc FROM map_nodes WHERE repo_id = ? AND level = 'file' AND summary = ''",
@@ -41,54 +42,54 @@ export class MapSummarizer {
     for (let i = 0; i < unsummarized.length; i += this.batchSize) {
       const batch = unsummarized.slice(i, i + this.batchSize);
 
-      const batchContent = batch
-        .map(
-          (node) =>
-            `### ${node.path} (${node.language}, ${node.loc} LOC, complexity: ${node.complexity_score.toFixed(2)})\nExports: ${node.public_api}`,
-        )
-        .join("\n\n");
+      if (useLlm) {
+        const batchContent = batch
+          .map(
+            (node) =>
+              `### ${node.path} (${node.language}, ${node.loc} LOC, complexity: ${node.complexity_score.toFixed(2)})\nExports: ${node.public_api}`,
+          )
+          .join("\n\n");
 
-      try {
-        const response = await this.conductor.complete({
-          messages: [
-            {
-              role: "user",
-              content: `Summarize each of these ${batch.length} modules:\n\n${batchContent}\n\nProvide one summary per module, formatted as:\n**path**: summary`,
-            },
-          ],
-          model: this.model,
-          systemPrompt: SUMMARIZE_PROMPT,
-          maxTokens: batch.length * 250,
-          temperature: 0,
-        });
+        try {
+          const response = await this.conductor.complete({
+            messages: [
+              {
+                role: "user",
+                content: `Summarize each of these ${batch.length} modules:\n\n${batchContent}\n\nProvide one summary per module, formatted as:\n**path**: summary`,
+              },
+            ],
+            model: this.model,
+            systemPrompt: SUMMARIZE_PROMPT,
+            maxTokens: batch.length * 250,
+            temperature: 0,
+          });
 
-        // Parse the batch response and update each node
-        const summaries = parseBatchSummaries(response.content, batch.map((n) => n.path));
+          const summaries = parseBatchSummaries(response.content, batch.map((n) => n.path));
 
-        this.db.transaction(() => {
-          for (const node of batch) {
-            const summary = summaries.get(node.path) ?? `${node.language} module at ${node.path} (${node.loc} LOC)`;
-            updateStmt.run(summary, node.id);
-            summarized++;
-            onProgress?.(node.id as MapNodeId);
-          }
-        })();
-      } catch (error) {
-        log.error(
-          { error, batchStart: i, batchSize: batch.length },
-          "Batch summarization failed, using fallback",
-        );
-
-        // Fallback: generate mechanical summaries
-        this.db.transaction(() => {
-          for (const node of batch) {
-            const exports = safeJsonParse(node.public_api);
-            const summary = `${node.language} module. Exports: ${exports.slice(0, 5).join(", ")}${exports.length > 5 ? "..." : ""}. ${node.loc} LOC, complexity: ${node.complexity_score.toFixed(2)}.`;
-            updateStmt.run(summary, node.id);
-            summarized++;
-          }
-        })();
+          this.db.transaction(() => {
+            for (const node of batch) {
+              const summary = summaries.get(node.path) ?? mechanicalSummary(node);
+              updateStmt.run(summary, node.id);
+              summarized++;
+              onProgress?.(node.id as MapNodeId);
+            }
+          })();
+          continue;
+        } catch (error) {
+          log.warn(
+            { error, batchStart: i, batchSize: batch.length },
+            "LLM summarization failed, using mechanical fallback",
+          );
+        }
       }
+
+      // Mechanical summaries (fast, no LLM needed)
+      this.db.transaction(() => {
+        for (const node of batch) {
+          updateStmt.run(mechanicalSummary(node), node.id);
+          summarized++;
+        }
+      })();
     }
 
     // Propagate summaries up to module/package level
@@ -171,6 +172,14 @@ function parseBatchSummaries(
   }
 
   return summaries;
+}
+
+function mechanicalSummary(node: { path: string; language: string; public_api: string; complexity_score: number; loc: number }): string {
+  const exports = safeJsonParse(node.public_api);
+  const exportStr = exports.length > 0
+    ? `Exports: ${exports.slice(0, 5).join(", ")}${exports.length > 5 ? ` (+${exports.length - 5} more)` : ""}.`
+    : "No named exports.";
+  return `${node.language} module (${node.loc} LOC). ${exportStr}`;
 }
 
 function safeJsonParse(json: string): string[] {

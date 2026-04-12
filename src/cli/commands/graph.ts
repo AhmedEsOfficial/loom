@@ -5,7 +5,7 @@ export async function graphCommand(
   action: "list" | "show" | "replay",
   id?: string,
 ): Promise<void> {
-  const config = loadConfig();
+  const config = await loadConfig();
   const kernel = new LoomKernel(config);
 
   try {

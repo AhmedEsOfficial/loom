@@ -19,7 +19,7 @@ export async function initCommand(repoPath?: string): Promise<void> {
   }
 
   // Load/create config
-  const config = loadConfig(targetPath);
+  const config = await loadConfig(targetPath);
   saveConfig(config);
   console.log(`  Configuration saved to ${dataDir}/config.json`);
 

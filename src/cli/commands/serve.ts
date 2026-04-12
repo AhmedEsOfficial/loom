@@ -3,7 +3,7 @@ import { loadConfig } from "../config.js";
 import { createMcpServer } from "../../mcp/index.js";
 
 export async function serveCommand(opts: { port?: number }): Promise<void> {
-  const config = loadConfig();
+  const config = await loadConfig();
   const kernel = new LoomKernel(config);
 
   console.log("Starting Loom MCP server...");

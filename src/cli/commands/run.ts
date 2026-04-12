@@ -2,7 +2,7 @@ import { LoomKernel } from "../../kernel.js";
 import { loadConfig } from "../config.js";
 
 export async function runCommand(task: string): Promise<void> {
-  const config = loadConfig();
+  const config = await loadConfig();
   const kernel = new LoomKernel(config);
 
   console.log(`Task: ${task}`);

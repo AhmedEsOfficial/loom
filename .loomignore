@@ -1,0 +1,34 @@
+# Loom ignore patterns
+# These patterns control which files the Cartographer indexes.
+# Syntax is similar to .gitignore.
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+
+# Loom data
+.loom/
+
+# Documentation (not source code)
+*.md
+
+# Config files
+*.json
+*.yaml
+*.yml
+*.toml
+
+# Test fixtures
+test/fixtures/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -5,7 +5,7 @@ export async function mapCommand(opts: {
   refresh?: boolean;
   zoom?: string;
 }): Promise<void> {
-  const config = loadConfig();
+  const config = await loadConfig();
   const kernel = new LoomKernel(config);
 
   try {

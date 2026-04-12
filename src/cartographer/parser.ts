@@ -2,22 +2,29 @@ import Parser from "tree-sitter";
 import type { ParsedFile, ParsedSymbol } from "../types/cartographer.js";
 import type { SymbolDetail } from "../types/substrate.js";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { createLogger } from "../util/logger.js";
 
 const log = createLogger("cartographer");
 
+// Use createRequire for CJS tree-sitter grammar packages (they don't support ESM import)
+const require = createRequire(import.meta.url);
+
 // Language grammars loaded on demand
 const grammarCache = new Map<string, any>();
 
-const LANGUAGE_MAP: Record<string, string> = {
-  typescript: "tree-sitter-typescript/typescript",
-  tsx: "tree-sitter-typescript/tsx",
-  javascript: "tree-sitter-javascript",
-  python: "tree-sitter-python",
-  go: "tree-sitter-go",
-  rust: "tree-sitter-rust",
-  java: "tree-sitter-java",
-  c: "tree-sitter-c",
+// Mapping from language name to how to load the grammar via require()
+// tree-sitter-typescript exports { typescript, tsx } from its main entry
+// All others export a single grammar from their main entry
+const LANGUAGE_MAP: Record<string, { module: string; property?: string }> = {
+  typescript: { module: "tree-sitter-typescript", property: "typescript" },
+  tsx: { module: "tree-sitter-typescript", property: "tsx" },
+  javascript: { module: "tree-sitter-javascript" },
+  python: { module: "tree-sitter-python" },
+  go: { module: "tree-sitter-go" },
+  rust: { module: "tree-sitter-rust" },
+  java: { module: "tree-sitter-java" },
+  c: { module: "tree-sitter-c" },
 };
 
 const EXTENSION_MAP: Record<string, string> = {
@@ -43,20 +50,20 @@ export function detectLanguage(filePath: string): string | null {
   return EXTENSION_MAP[ext] ?? null;
 }
 
-async function getGrammar(language: string): Promise<any> {
+function getGrammar(language: string): any {
   const cached = grammarCache.get(language);
   if (cached) return cached;
 
-  const modulePath = LANGUAGE_MAP[language];
-  if (!modulePath) return null;
+  const mapping = LANGUAGE_MAP[language];
+  if (!mapping) return null;
 
   try {
-    const mod = await import(modulePath);
-    const grammar = mod.default ?? mod;
+    const mod = require(mapping.module);
+    const grammar = mapping.property ? mod[mapping.property] : mod;
     grammarCache.set(language, grammar);
     return grammar;
-  } catch (error) {
-    log.warn({ language, error }, "Failed to load grammar");
+  } catch (error: any) {
+    log.warn({ language, error: { code: error.code, message: error.message } }, "Failed to load grammar");
     return null;
   }
 }
@@ -68,7 +75,7 @@ export async function parseFile(filePath: string): Promise<ParsedFile | null> {
   const language = detectLanguage(filePath);
   if (!language) return null;
 
-  const grammar = await getGrammar(language);
+  const grammar = getGrammar(language);
   if (!grammar) return null;
 
   let source: string;

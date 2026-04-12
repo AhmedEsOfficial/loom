@@ -2,7 +2,7 @@ import { LoomKernel } from "../../kernel.js";
 import { loadConfig } from "../config.js";
 
 export async function searchCommand(query: string): Promise<void> {
-  const config = loadConfig();
+  const config = await loadConfig();
   const kernel = new LoomKernel(config);
 
   try {

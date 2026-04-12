@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
+import { readdirSync, statSync, readFileSync, existsSync } from "node:fs";
 import { join, relative, dirname, basename, sep } from "node:path";
 import type Database from "better-sqlite3";
 import type { MapNode, MapNodeInsert, CodebaseMap, ParsedFile } from "../types/cartographer.js";
@@ -255,6 +255,128 @@ function safeJsonParse(json: string): string[] {
 }
 
 /**
+ * Default ignore patterns applied even without a .loomignore file.
+ */
+const DEFAULT_IGNORE_PATTERNS = [
+  "node_modules",
+  ".git",
+  ".loom",
+  "dist",
+  "build",
+  "out",
+  "__pycache__",
+  ".tox",
+  "target",
+  ".next",
+  ".nuxt",
+  "coverage",
+  ".nyc_output",
+  ".venv",
+  "venv",
+  "vendor",
+  ".cache",
+  ".parcel-cache",
+  ".turbo",
+];
+
+/**
+ * Load ignore patterns from a .loomignore file (gitignore-style).
+ * Returns the merged set of default + config + .loomignore patterns.
+ */
+export function loadIgnorePatterns(rootPath: string, configPatterns: string[]): string[] {
+  const patterns = new Set<string>(DEFAULT_IGNORE_PATTERNS);
+
+  // Add config-specified patterns
+  for (const p of configPatterns) {
+    patterns.add(p);
+  }
+
+  // Read .loomignore if present
+  const ignorePath = join(rootPath, ".loomignore");
+  if (existsSync(ignorePath)) {
+    try {
+      const content = readFileSync(ignorePath, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        // Skip comments and empty lines
+        if (trimmed && !trimmed.startsWith("#")) {
+          patterns.add(trimmed);
+        }
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+
+  // Also respect .gitignore for common patterns
+  const gitignorePath = join(rootPath, ".gitignore");
+  if (existsSync(gitignorePath)) {
+    try {
+      const content = readFileSync(gitignorePath, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith("#")) {
+          patterns.add(trimmed);
+        }
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+
+  return [...patterns];
+}
+
+/**
+ * Test whether a path matches an ignore pattern.
+ * Supports:
+ *  - Exact name match: "node_modules" matches any dir named node_modules
+ *  - Glob star suffix: "*.md" matches any .md file
+ *  - Leading slash: "/dist" matches only at root level
+ *  - Trailing slash: "build/" matches only directories
+ *  - Path fragments: "src/generated" matches that path segment
+ */
+function matchesIgnorePattern(
+  entryName: string,
+  relPath: string,
+  isDirectory: boolean,
+  pattern: string,
+): boolean {
+  let p = pattern;
+
+  // Trailing slash means directory-only
+  if (p.endsWith("/")) {
+    if (!isDirectory) return false;
+    p = p.slice(0, -1);
+  }
+
+  // Leading slash means root-relative
+  if (p.startsWith("/")) {
+    p = p.slice(1);
+    return relPath === p || relPath.startsWith(p + "/");
+  }
+
+  // Glob star patterns: "*.md", "*.log", etc.
+  if (p.startsWith("*.")) {
+    const ext = p.slice(1); // e.g. ".md"
+    return entryName.endsWith(ext);
+  }
+
+  // Double-star glob: "**/pattern" — just match the base pattern
+  if (p.startsWith("**/")) {
+    p = p.slice(3);
+  }
+
+  // Exact name match (most common: "node_modules", ".git", etc.)
+  if (!p.includes("/")) {
+    return entryName === p;
+  }
+
+  // Path fragment match
+  return relPath === p || relPath.startsWith(p + "/") || relPath.includes("/" + p + "/") || relPath.endsWith("/" + p);
+}
+
+/**
  * Collect all files in a directory, respecting ignore patterns.
  */
 export function collectFiles(
@@ -274,9 +396,10 @@ export function collectFiles(
 
     for (const entry of entries) {
       const fullPath = join(dir, entry.name);
+      const relPath = relative(rootPath, fullPath);
 
       // Check ignore patterns
-      if (ignorePatterns.some((p) => entry.name === p || fullPath.includes(p))) {
+      if (ignorePatterns.some((p) => matchesIgnorePattern(entry.name, relPath, entry.isDirectory(), p))) {
         continue;
       }
 

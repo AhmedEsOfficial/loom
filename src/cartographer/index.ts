@@ -10,7 +10,7 @@ import type {
 import type { SymbolDetail } from "../types/substrate.js";
 import type { MapNodeId } from "../types/common.js";
 import { parseFile, detectLanguage } from "./parser.js";
-import { CodebaseMapper, collectFiles } from "./mapper.js";
+import { CodebaseMapper, collectFiles, loadIgnorePatterns } from "./mapper.js";
 import { MapSummarizer } from "./summarizer.js";
 import { FileWatcher } from "./watcher.js";
 import { createLogger } from "../util/logger.js";
@@ -19,7 +19,7 @@ import { execSync } from "node:child_process";
 const log = createLogger("cartographer");
 
 export { parseFile, detectLanguage } from "./parser.js";
-export { CodebaseMapper, collectFiles } from "./mapper.js";
+export { CodebaseMapper, collectFiles, loadIgnorePatterns } from "./mapper.js";
 export { MapSummarizer } from "./summarizer.js";
 export { FileWatcher } from "./watcher.js";
 
@@ -55,8 +55,11 @@ export class CartographerImpl implements Cartographer {
 
     log.info({ repoPath, gitSha }, "Building codebase map");
 
+    // Load ignore patterns from .loomignore, .gitignore, and config
+    const effectiveIgnore = loadIgnorePatterns(repoPath, this.ignorePatterns);
+
     // Collect all source files
-    const files = collectFiles(repoPath, this.ignorePatterns, SUPPORTED_EXTENSIONS);
+    const files = collectFiles(repoPath, effectiveIgnore, SUPPORTED_EXTENSIONS);
     log.info({ fileCount: files.length }, "Collected source files");
 
     // Parse all files

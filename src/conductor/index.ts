@@ -11,7 +11,7 @@ import { createLogger } from "../util/logger.js";
 import { AnthropicProvider } from "./anthropic.js";
 import { OpenAIProvider } from "./openai.js";
 import { OpenRouterProvider } from "./openrouter.js";
-import { LocalProvider } from "./local.js";
+import { LocalProvider, type LocalBackend } from "./local.js";
 import { TrajectoryStore } from "./trajectory.js";
 
 export { AnthropicProvider } from "./anthropic.js";
@@ -141,8 +141,11 @@ function createProvider(config: ProviderConfig): Provider {
       return new OpenAIProvider(config.apiKey, config.baseUrl);
     case "openrouter":
       return new OpenRouterProvider(config.apiKey);
-    case "local":
-      return new LocalProvider(config.baseUrl);
+    case "local": {
+      const backend: LocalBackend = config.baseUrl?.includes("11434") ? "ollama" : "openai-compat";
+      const models = Object.keys(config.models);
+      return new LocalProvider(config.baseUrl, backend, models);
+    }
     default:
       throw new Error(`Unknown provider: ${config.name}`);
   }
