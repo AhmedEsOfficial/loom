@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.loom/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage/
+reference_project
+.loom
