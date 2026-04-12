@@ -1,15 +1,24 @@
-import { LoomKernel } from "../../kernel.js";
-import { loadConfig } from "../config.js";
-import { createMcpServer } from "../../mcp/index.js";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { createMcpServer, KernelManager } from "../../mcp/index.js";
 
 export async function serveCommand(opts: { port?: number }): Promise<void> {
-  const config = await loadConfig();
-  const kernel = new LoomKernel(config);
+  const manager = new KernelManager();
 
-  // All user-facing output must go to stderr — stdout is reserved for MCP JSON-RPC
-  console.error("Starting Loom MCP server...");
+  // If we're in an initialized project, open it automatically
+  const cwd = process.cwd();
+  if (existsSync(resolve(cwd, ".loom"))) {
+    try {
+      await manager.openProject(cwd);
+      console.error(`Loom MCP server: opened project at ${cwd}`);
+    } catch (e: any) {
+      console.error(`Warning: could not open project at ${cwd}: ${e.message}`);
+    }
+  } else {
+    console.error("Loom MCP server: no active project. Use loom_init or loom_open to set one.");
+  }
 
-  const server = createMcpServer(kernel);
+  const server = createMcpServer(manager);
 
   if (opts.port) {
     console.error(`SSE transport not yet implemented, falling back to stdio`);
@@ -26,7 +35,7 @@ export async function serveCommand(opts: { port?: number }): Promise<void> {
 
   // Keep alive until killed
   process.on("SIGINT", () => {
-    kernel.shutdown();
+    manager.shutdown();
     process.exit(0);
   });
 }

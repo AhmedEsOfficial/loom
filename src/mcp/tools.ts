@@ -1,6 +1,7 @@
 import type { LoomKernel } from "../kernel.js";
 import type { GraphId, NodeId } from "../types/common.js";
 import { submitGraph, reportResult } from "../weaver/client-driven.js";
+import type { KernelManager } from "./kernel-manager.js";
 
 export interface McpToolDefinition {
   name: string;
@@ -9,7 +10,95 @@ export interface McpToolDefinition {
   handler: (input: Record<string, unknown>) => Promise<string>;
 }
 
-export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
+/**
+ * Create MCP tools backed by a KernelManager (supports project switching).
+ */
+export function createManagedMcpTools(manager: KernelManager): McpToolDefinition[] {
+  // Helper: get the active kernel or return an error string
+  const k = (): LoomKernel => manager.requireKernel();
+
+  return [
+    {
+      name: "loom_init",
+      description:
+        "Initialize Loom in a project directory. Creates .loom/, builds the codebase map (AST index), " +
+        "and switches the active project to this directory. Run this before using other Loom tools on a new project.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Absolute path to the project directory to initialize" },
+        },
+        required: ["path"],
+      },
+      handler: async (input) => {
+        try {
+          const result = await manager.initProject(input.path as string);
+          return JSON.stringify({
+            success: true,
+            projectPath: input.path,
+            ...result,
+            message: `Loom initialized. Indexed ${result.fileCount} files, ${result.nodeCount} map nodes. All loom tools now operate on this project.`,
+          }, null, 2);
+        } catch (error: any) {
+          return JSON.stringify({ success: false, error: error.message }, null, 2);
+        }
+      },
+    },
+    {
+      name: "loom_open",
+      description:
+        "Switch to an already-initialized Loom project (must have a .loom/ directory). " +
+        "Use this when the project was previously initialized with loom_init and you want to switch back to it.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Absolute path to the project directory" },
+        },
+        required: ["path"],
+      },
+      handler: async (input) => {
+        try {
+          await manager.openProject(input.path as string);
+          return JSON.stringify({
+            success: true,
+            projectPath: input.path,
+            message: `Switched to project at ${input.path}. All loom tools now operate on this project.`,
+          }, null, 2);
+        } catch (error: any) {
+          return JSON.stringify({ success: false, error: error.message }, null, 2);
+        }
+      },
+    },
+    {
+      name: "loom_status",
+      description: "Show the currently active Loom project and its status.",
+      inputSchema: { type: "object", properties: {} },
+      handler: async () => {
+        if (!manager.isInitialized) {
+          return JSON.stringify({
+            active: false,
+            message: "No project is active. Call loom_init or loom_open first.",
+          }, null, 2);
+        }
+        const kernel = k();
+        return JSON.stringify({
+          active: true,
+          projectPath: manager.projectPath,
+          providers: k().config.providers.map((p) => p.name),
+          modelRoles: k().config.modelRoles,
+        }, null, 2);
+      },
+    },
+    ...createMcpTools(manager),
+  ];
+}
+
+/**
+ * Create the core MCP tools (requires an active kernel via manager).
+ */
+function createMcpTools(manager: KernelManager): McpToolDefinition[] {
+  const k = (): LoomKernel => manager.requireKernel();
+
   return [
     {
       name: "loom_search",
@@ -23,7 +112,7 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
         required: ["query"],
       },
       handler: async (input) => {
-        const results = await kernel.substrate.search(
+        const results = await k().substrate.search(
           input.query as string,
           { limit: (input.limit as number) ?? 20 },
         );
@@ -42,7 +131,7 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
         required: ["symbolName"],
       },
       handler: async (input) => {
-        const result = await kernel.substrate.expandSymbol(
+        const result = await k().substrate.expandSymbol(
           input.symbolName as string,
           input.filePath as string | undefined,
         );
@@ -61,7 +150,7 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
         required: ["taskFingerprint"],
       },
       handler: async (input) => {
-        const episodes = await kernel.substrate.relatedEpisodes(
+        const episodes = await k().substrate.relatedEpisodes(
           input.taskFingerprint as string,
           (input.limit as number) ?? 10,
         );
@@ -80,10 +169,10 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
         required: ["path"],
       },
       handler: async (input) => {
-        const node = await kernel.cartographer.zoomTo(input.path as string);
+        const node = await k().cartographer.zoomTo(input.path as string);
         if (!node) return "Path not found in codebase map";
 
-        const children = await kernel.cartographer.queryMap(
+        const children = await k().cartographer.queryMap(
           node.id,
           (input.depth as number) ?? 1,
         );
@@ -101,7 +190,7 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
         required: ["description"],
       },
       handler: async (input) => {
-        const skills = await kernel.substrate.skillLookup(
+        const skills = await k().substrate.skillLookup(
           input.description as string,
         );
         return JSON.stringify(skills, null, 2);
@@ -118,7 +207,7 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
         required: ["task"],
       },
       handler: async (input) => {
-        const result = await kernel.run(input.task as string);
+        const result = await k().run(input.task as string);
         return JSON.stringify(
           {
             success: result.success,
@@ -148,7 +237,7 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
         },
       },
       handler: async (input) => {
-        const templates = kernel.graphCache.list((input.limit as number) ?? 10);
+        const templates = k().graphCache.list((input.limit as number) ?? 10);
         return JSON.stringify(
           templates.map((t) => ({
             id: t.id,
@@ -175,7 +264,7 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
         required: ["ref"],
       },
       handler: async (input) => {
-        const content = await kernel.substrate.refetch(input.ref as string);
+        const content = await k().substrate.refetch(input.ref as string);
         return content ?? "Content not found";
       },
     },
@@ -207,8 +296,8 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
           input.task as string,
           input.nodes as unknown[],
           {
-            maxNodes: kernel.config.weaver.maxNodes,
-            maxLoopIterations: kernel.config.weaver.maxLoopIterations,
+            maxNodes: k().config.weaver.maxNodes,
+            maxLoopIterations: k().config.weaver.maxLoopIterations,
           },
         );
         return JSON.stringify(result, null, 2);
@@ -242,7 +331,7 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
         // If completed successfully, store episodes in substrate
         if ("done" in result && result.done) {
           try {
-            await kernel.substrate.storeEpisode({
+            await k().substrate.storeEpisode({
               role: "assistant",
               content: input.output as string,
               toolName: "client_driven_graph",
