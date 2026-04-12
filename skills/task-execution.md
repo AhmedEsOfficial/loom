@@ -1,6 +1,8 @@
 # Task Execution
 
-End-to-end workflow for submitting tasks via `loom_weave` and interpreting results.
+End-to-end workflow for submitting tasks via `loom_weave` (model-driven) and interpreting results.
+
+> **No model available?** Use [client-driven execution](client-driven-execution.md) with `loom_submit_graph` + `loom_report_result` instead — no local model or API key required.
 
 ## How task execution works
 
@@ -110,3 +112,7 @@ The `tokenUsage` field shows total tokens across all nodes:
 - `output` — completion tokens generated
 
 Use this to monitor cost. Complex graphs with many nodes and tool calls can consume significant tokens.
+
+## Alternative: Client-driven execution
+
+If no model or API key is available, you can author and execute graphs yourself using `loom_submit_graph` and `loom_report_result`. See [client-driven-execution.md](client-driven-execution.md) for the full workflow.

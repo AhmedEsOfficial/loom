@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__loom__loom_init",
+      "mcp__loom__loom_open",
+      "mcp__loom__loom_status",
+      "mcp__loom__loom_search",
+      "mcp__loom__loom_expand_symbol",
+      "mcp__loom__loom_related_episodes",
+      "mcp__loom__loom_map_query",
+      "mcp__loom__loom_skill_lookup",
+      "mcp__loom__loom_refetch",
+      "mcp__loom__loom_graph_status",
+      "mcp__loom__loom_submit_graph",
+      "mcp__loom__loom_report_result"
+    ]
+  }
+}
