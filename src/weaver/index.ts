@@ -9,3 +9,4 @@ export { executeGraph, type SchedulerConfig } from "./scheduler.js";
 export { applyMutation } from "./mutator.js";
 export { GraphCache } from "./cache.js";
 export { extractTemplate, findMatchingTemplate } from "./templates.js";
+export { submitGraph, reportResult, getActiveGraph } from "./client-driven.js";

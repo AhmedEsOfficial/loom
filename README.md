@@ -160,6 +160,46 @@ This starts the server on stdio. Connect it as an MCP server in your editor.
 | `loom_graph_status` | List cached graph templates and success rates |
 | `loom_refetch` | Re-fetch externalized content by substrate reference |
 
+
+### Here's how to add Loom to Claude Code:
+
+### Option 1: CLI command (recommended)
+```bash
+claude mcp add loom -- npx tsx /path/to/loom/bin/loom.ts serve
+```
+
+### Option 2: Project-level config
+Create or edit /path/to/loom/.claude/settings.json:
+
+```jsonc
+
+{
+  "mcpServers": {
+    "loom": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/loom/bin/loom.ts", "serve"],
+      "cwd": "/path/to/loom"
+    }
+  }
+}
+```
+
+### Option 3: Global config (available in all projects)
+Add to ~/.claude/settings.json:
+
+```jsonc
+
+{
+  "mcpServers": {
+    "loom": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/loom/bin/loom.ts", "serve"],
+      "cwd": "/path/to/loom"
+    }
+  }
+}
+```
+
 ## Configuration
 
 Configuration lives at `.loom/config.json`. It is auto-generated on `loom init` but can be edited manually.

@@ -6,19 +6,16 @@ export async function serveCommand(opts: { port?: number }): Promise<void> {
   const config = await loadConfig();
   const kernel = new LoomKernel(config);
 
-  console.log("Starting Loom MCP server...");
+  // All user-facing output must go to stderr — stdout is reserved for MCP JSON-RPC
+  console.error("Starting Loom MCP server...");
 
   const server = createMcpServer(kernel);
 
   if (opts.port) {
-    // SSE transport
-    console.log(`Loom MCP server listening on port ${opts.port} (SSE)`);
-    // For SSE, we'd use the MCP SDK's SSE transport
-    // For now, default to stdio
-    console.log("SSE transport not yet implemented, falling back to stdio");
+    console.error(`SSE transport not yet implemented, falling back to stdio`);
   }
 
-  // stdio transport (default)
+  // stdio transport (default for Claude Code / IDE integration)
   const { StdioServerTransport } = await import(
     "@modelcontextprotocol/sdk/server/stdio.js"
   );

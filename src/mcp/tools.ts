@@ -1,4 +1,6 @@
 import type { LoomKernel } from "../kernel.js";
+import type { GraphId, NodeId } from "../types/common.js";
+import { submitGraph, reportResult } from "../weaver/client-driven.js";
 
 export interface McpToolDefinition {
   name: string;
@@ -175,6 +177,87 @@ export function createMcpTools(kernel: LoomKernel): McpToolDefinition[] {
       handler: async (input) => {
         const content = await kernel.substrate.refetch(input.ref as string);
         return content ?? "Content not found";
+      },
+    },
+    {
+      name: "loom_submit_graph",
+      description:
+        `Submit an execution graph for client-driven execution. No local model or API key required — YOU are the executor. ` +
+        `Author a graph with step nodes, submit it here for validation and scheduling, then execute each node yourself and report results via loom_report_result. ` +
+        `Loom handles: validation, dependency scheduling, episodic memory, and template caching.\n\n` +
+        `Graph node types:\n` +
+        `- step: { type: "step", id: string, prompt: string, dependsOn?: string[], tools?: string[] }\n` +
+        `- parallel: { type: "parallel", id: string, branches: node[], merge: "all"|"first"|"majority", dependsOn?: string[] }\n` +
+        `- loop_until: { type: "loop_until", id: string, body: node[], until: string, maxIterations?: number, dependsOn?: string[] }\n\n` +
+        `Returns the first nodes ready to execute with their prompts and dependency outputs.`,
+      inputSchema: {
+        type: "object",
+        properties: {
+          task: { type: "string", description: "Task description" },
+          nodes: {
+            type: "array",
+            description: "Array of graph nodes (step, parallel, or loop_until)",
+            items: { type: "object" },
+          },
+        },
+        required: ["task", "nodes"],
+      },
+      handler: async (input) => {
+        const result = submitGraph(
+          input.task as string,
+          input.nodes as unknown[],
+          {
+            maxNodes: kernel.config.weaver.maxNodes,
+            maxLoopIterations: kernel.config.weaver.maxLoopIterations,
+          },
+        );
+        return JSON.stringify(result, null, 2);
+      },
+    },
+    {
+      name: "loom_report_result",
+      description:
+        `Report the result of executing a node in a client-driven graph. ` +
+        `After executing a node (doing the work described in its prompt), call this to record the result. ` +
+        `Loom stores the result as an episode, advances the scheduler, and returns the next nodes ready to execute. ` +
+        `When done=true, the graph is complete.`,
+      inputSchema: {
+        type: "object",
+        properties: {
+          graphId: { type: "string", description: "Graph ID from loom_submit_graph" },
+          nodeId: { type: "string", description: "ID of the node you executed" },
+          output: { type: "string", description: "Your output/result from executing this node" },
+          status: { type: "string", description: '"success" or "failure"' },
+        },
+        required: ["graphId", "nodeId", "output", "status"],
+      },
+      handler: async (input) => {
+        const result = reportResult(
+          input.graphId as string,
+          input.nodeId as string,
+          input.output as string,
+          input.status as "success" | "failure",
+        );
+
+        // If completed successfully, store episodes in substrate
+        if ("done" in result && result.done) {
+          try {
+            await kernel.substrate.storeEpisode({
+              role: "assistant",
+              content: input.output as string,
+              toolName: "client_driven_graph",
+              toolInput: JSON.stringify({ graphId: input.graphId, nodeId: input.nodeId }),
+              graphId: input.graphId as GraphId,
+              nodeId: input.nodeId as NodeId,
+              taskFingerprint: "",
+              tokenCount: 0,
+            });
+          } catch {
+            // Non-fatal: episode storage failure shouldn't block the response
+          }
+        }
+
+        return JSON.stringify(result, null, 2);
       },
     },
   ];
