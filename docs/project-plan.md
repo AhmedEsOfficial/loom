@@ -1,3 +1,5 @@
+> **Design document.** This is the original plan and thesis for Loom. It describes the intended design and is broader than what is implemented today; see the [README](../README.md#status) for current status.
+
 # The Third Path: A Plan for an Emergent AI Harness
 
 ## 1. What the references actually do (and where they hit a ceiling)
