@@ -114,7 +114,8 @@ function runMigrations(db: Database.Database, embeddingDimensions: number): void
 function findMigrationsDir(): string | null {
   // Look relative to this file, then relative to CWD
   const candidates = [
-    join(import.meta.dirname ?? "", "../../migrations"),
+    join(import.meta.dirname ?? "", "../../migrations"), // running from src/ (tsx)
+    join(import.meta.dirname ?? "", "../../../migrations"), // running from dist/src/ (built)
     join(process.cwd(), "migrations"),
   ];
 
