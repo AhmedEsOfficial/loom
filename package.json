@@ -1,7 +1,7 @@
 {
   "name": "loom-harness",
   "version": "0.1.0",
-  "description": "An emergent AI harness — models author their own execution graphs over a persistent semantic substrate",
+  "description": "An emergent AI harness \u2014 models author their own execution graphs over a persistent semantic substrate",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -15,9 +15,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx watch bin/loom.ts",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit",
     "loom": "tsx bin/loom.ts"
   },
   "dependencies": {
@@ -47,5 +47,33 @@
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vitest": "^3.1.1"
-  }
+  },
+  "author": "AhmedEsOfficial",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AhmedEsOfficial/loom.git"
+  },
+  "homepage": "https://github.com/AhmedEsOfficial/loom#readme",
+  "bugs": {
+    "url": "https://github.com/AhmedEsOfficial/loom/issues"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "llm",
+    "mcp",
+    "model-context-protocol",
+    "tree-sitter",
+    "sqlite",
+    "claude-code"
+  ],
+  "files": [
+    "dist",
+    "migrations",
+    "skills",
+    ".claude",
+    "README.md",
+    "LICENSE"
+  ]
 }
