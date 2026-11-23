@@ -12,3 +12,7 @@ dist/
 coverage/
 reference_project
 .loom
+# AI-agent local instruction files (not part of the project)
+CLAUDE.md
+AGENTS.md
+.claude/settings.local.json
